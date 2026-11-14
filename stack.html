@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Башня (Stack) — Рекорды</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #0d0f14;
+      color: #f1f5f9;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #gameCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Верхний HUD поверх холста */
+    .hud {
+      position: relative;
+      z-index: 5;
+      width: 100%;
+      max-width: 420px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .top-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: auto;
+    }
+
+    .player-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: #e2e8f0;
+      background: rgba(15, 18, 26, 0.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 6px 12px;
+      border-radius: 99px;
+    }
+
+    .best-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fbbf24;
+      background: rgba(15, 18, 26, 0.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+      padding: 6px 12px;
+      border-radius: 99px;
+    }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      background: rgba(15, 18, 26, 0.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      color: #fff;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .big-score {
+      margin-top: 14px;
+      font-size: 64px;
+      font-weight: 900;
+      line-height: 1;
+      color: #ffffff;
+      text-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+      transition: transform 0.1s;
+    }
+
+    .combo-label {
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #38bdf8;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .combo-label.visible {
+      opacity: 1;
+    }
+
+    .tap-hint {
+      position: fixed;
+      bottom: 44px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.75);
+      background: rgba(15, 18, 26, 0.6);
+      padding: 10px 20px;
+      border-radius: 99px;
+      pointer-events: none;
+      animation: pulseHint 1.6s infinite;
+    }
+
+    @keyframes pulseHint {
+      0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(0.98); }
+      50% { opacity: 1; transform: translateX(-50%) scale(1.03); }
+    }
+
+    /* Модальное окно конца игры */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(9, 11, 16, 0.84);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      width: 100%;
+      max-width: 310px;
+      background: #171b26;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 22px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+      animation: popIn 0.2s ease-out;
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal h2 {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .stat-box {
+      background: #0f121a;
+      border-radius: 12px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-box-label {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+
+    .stat-box-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fbbf24;
+    }
+
+    .tg-status {
+      font-size: 12px;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .primary-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <header class="hud">
+    <div class="top-row">
+      <span class="player-badge" id="playerName">Игрок</span>
+      <span class="best-badge">🏆 <span id="bestDisplay">0</span></span>
+      <button class="icon-btn" id="soundBtn">🔇</button>
+    </div>
+    <div class="big-score" id="scoreDisplay">0</div>
+    <div class="combo-label" id="comboLabel">ИДЕАЛЬНО x2!</div>
+  </header>
+
+  <div class="tap-hint" id="tapHint">Нажми на экран или Пробел, чтобы поставить блок</div>
+
+  <div class="overlay" id="gameOverOverlay">
+    <div class="modal">
+      <h2>Башня рухнула!</h2>
+      <p id="newRecordBadge" style="color: #22c55e; font-size: 13px; font-weight: 700; display: none; margin-top: 4px;">
+        🔥 Новый личный рекорд!
+      </p>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-box-label">Этажей</div>
+          <div class="stat-box-val" id="finalScore">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Макс. комбо</div>
+          <div class="stat-box-val" id="finalCombo" style="color: #38bdf8;">0</div>
+        </div>
+      </div>
+      <div class="tg-status" id="tgStatusText">Рекорд сохранён локально</div>
+      <button class="primary-btn" id="restartBtn">Построить заново</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. ПОДКЛЮЧЕНИЕ К TELEGRAM БОТУ
+    // =========================================================================
+    const SERVER_URL = ""; // Например: "https://твой-бот.ru/api/submit_score"
+
+    let tg = null;
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+          document.getElementById("playerName").textContent = tg.initDataUnsafe.user.first_name;
+        }
+      }
+    } catch (e) {}
+
+    function sendScoreToBot(finalScore) {
+      const statusEl = document.getElementById("tgStatusText");
+      if (!tg || !tg.initData || !SERVER_URL) {
+        statusEl.textContent = "Локальный режим (готово к подключению бота)";
+        return;
+      }
+
+      statusEl.textContent = "Отправка рекорда в чат...";
+      fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData: tg.initData,
+          game: "stack",
+          score: finalScore
+        })
+      })
+      .then(res => res.json())
+      .then(() => { statusEl.textContent = "✅ Рекорд отправлен в группу!"; })
+      .catch(() => { statusEl.textContent = "⚠️ Сервер бота недоступен"; });
+    }
+
+    // =========================================================================
+    // 2. ЗВУКИ С НАРАСТАЮЩЕЙ НОТОЙ ПРИ КОМБО (как в оригинальном Stack)
+    // =========================================================================
+    const SoundFX = (() => {
+      let ctx = null;
+      let enabled = false;
+
+      function init() {
+        if (!ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) ctx = new AudioCtx();
+        }
+        if (ctx && ctx.state === "suspended") ctx.resume();
+      }
+
+      function play(freq, type, dur, vol = 0.09, slideTo = null) {
+        if (!enabled) return;
+        init();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, ctx.currentTime + dur);
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + dur);
+      }
+
+      return {
+        toggle() { enabled = !enabled; if (enabled) init(); return enabled; },
+        place: () => play(210, "triangle", 0.09, 0.08, 140),
+        perfect: (combo) => {
+          // Музыкальная гамма вверх с каждым идеальным попаданием
+          const freq = 330 * Math.pow(1.06, Math.min(combo, 18));
+          play(freq, "sine", 0.22, 0.11, freq * 1.02);
+        },
+        fall: () => play(240, "sawtooth", 0.38, 0.08, 65)
+      };
+    })();
+
+    // =========================================================================
+    // 3. ДВИЖОК БАШНИ (STACK)
+    // =========================================================================
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let dpr = window.devicePixelRatio || 1;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    const BLOCK_HEIGHT = 28;
+    const INITIAL_WIDTH_RATIO = 0.56;
+    const PERFECT_TOLERANCE = 6; // Допуск в пикселях для идеального попадания
+
+    let stack = [];
+    let debris = [];
+    let ripples = [];
+    let currentBlock = null;
+
+    let score = 0;
+    let bestScore = parseInt(localStorage.getItem("stack_best_v1") || "0", 10);
+    let combo = 0;
+    let maxCombo = 0;
+    let baseHue = Math.floor(Math.random() * 360);
+    let cameraY = 0;
+    let targetCameraY = 0;
+    let isGameOver = false;
+    let lastTime = 0;
+
+    document.getElementById("bestDisplay").textContent = bestScore;
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function getBlockColor(level) {
+      const hue = (baseHue + level * 7) % 360;
+      return {
+        hue,
+        main: `hsl(${hue}, 78%, 56%)`,
+        top: `hsl(${hue}, 85%, 70%)`,
+        side: `hsl(${hue}, 70%, 40%)`
+      };
+    }
+
+    function spawnNextBlock() {
+      const topBlock = stack[stack.length - 1];
+      const level = stack.length;
+      const fromLeft = level % 2 === 1;
+      const speed = Math.min(540, 230 + level * 6.5);
+
+      currentBlock = {
+        x: fromLeft ? -topBlock.w : width,
+        y: topBlock.y - BLOCK_HEIGHT,
+        w: topBlock.w,
+        dir: fromLeft ? 1 : -1,
+        speed,
+        color: getBlockColor(level)
+      };
+
+      // Плавно поднимаем камеру, чтобы башня всегда была в удобной зоне экрана
+      const desiredScreenY = height * 0.64;
+      if (currentBlock.y + targetCameraY < desiredScreenY) {
+        targetCameraY = desiredScreenY - currentBlock.y;
+      }
+    }
+
+    function startNewGame() {
+      stack = [];
+      debris = [];
+      ripples = [];
+      score = 0;
+      combo = 0;
+      maxCombo = 0;
+      isGameOver = false;
+      baseHue = Math.floor(Math.random() * 360);
+
+      const startW = Math.min(240, Math.floor(width * INITIAL_WIDTH_RATIO));
+      const baseY = height * 0.72;
+
+      // Фундамент башни
+      stack.push({
+        x: (width - startW) / 2,
+        y: baseY,
+        w: startW,
+        color: getBlockColor(0)
+      });
+
+      cameraY = 0;
+      targetCameraY = 0;
+
+      document.getElementById("scoreDisplay").textContent = "0";
+      document.getElementById("comboLabel").classList.remove("visible");
+      document.getElementById("tapHint").style.display = "block";
+      document.getElementById("gameOverOverlay").classList.remove("active");
+
+      spawnNextBlock();
+      lastTime = performance.now();
+    }
+
+    function dropBlock() {
+      if (isGameOver || !currentBlock) return;
+      document.getElementById("tapHint").style.display = "none";
+
+      const prev = stack[stack.length - 1];
+      const delta = currentBlock.x - prev.x;
+      const absDelta = Math.abs(delta);
+
+      // Полный промах мимо башни
+      if (absDelta >= prev.w) {
+        debris.push({
+          x: currentBlock.x,
+          y: currentBlock.y,
+          w: currentBlock.w,
+          vx: delta > 0 ? 70 : -70,
+          vy: 0,
+          rot: 0,
+          vrot: delta > 0 ? 2.2 : -2.2,
+          color: currentBlock.color
+        });
+        currentBlock = null;
+        triggerGameOver();
+        return;
+      }
+
+      // Идеальное попадание (в пределах допуска)
+      if (absDelta <= PERFECT_TOLERANCE) {
+        currentBlock.x = prev.x;
+        combo++;
+        maxCombo = Math.max(maxCombo, combo);
+        SoundFX.perfect(combo);
+
+        // При серии из 3+ идеальных попаданий подряд блок слегка расширяется!
+        if (combo >= 3) {
+          const maxW = Math.min(250, Math.floor(width * 0.62));
+          const grow = Math.min(18, maxW - currentBlock.w);
+          currentBlock.w += grow;
+          currentBlock.x -= grow / 2;
+        }
+
+        ripples.push({
+          x: currentBlock.x,
+          y: currentBlock.y,
+          w: currentBlock.w,
+          alpha: 0.85,
+          expand: 0
+        });
+
+        const comboEl = document.getElementById("comboLabel");
+        comboEl.textContent = combo >= 3 ? `🔥 СУПЕР РОСТ x${combo}!` : `✨ ИДЕАЛЬНО x${combo}!`;
+        comboEl.classList.add("visible");
+      } else {
+        // Обрезаем свисающий край
+        combo = 0;
+        document.getElementById("comboLabel").classList.remove("visible");
+        SoundFX.place();
+
+        const overlapW = prev.w - absDelta;
+        const cutW = absDelta;
+
+        if (delta > 0) {
+          // Свисает справа
+          debris.push({
+            x: prev.x + prev.w,
+            y: currentBlock.y,
+            w: cutW,
+            vx: 95,
+            vy: -40,
+            rot: 0,
+            vrot: 3.1,
+            color: currentBlock.color
+          });
+          currentBlock.w = overlapW;
+        } else {
+          // Свисает слева
+          debris.push({
+            x: currentBlock.x,
+            y: currentBlock.y,
+            w: cutW,
+            vx: -95,
+            vy: -40,
+            rot: 0,
+            vrot: -3.1,
+            color: currentBlock.color
+          });
+          currentBlock.x = prev.x;
+          currentBlock.w = overlapW;
+        }
+      }
+
+      stack.push({
+        x: currentBlock.x,
+        y: currentBlock.y,
+        w: currentBlock.w,
+        color: currentBlock.color
+      });
+
+      score++;
+      const scoreEl = document.getElementById("scoreDisplay");
+      scoreEl.textContent = score;
+      scoreEl.style.transform = "scale(1.16)";
+      setTimeout(() => { scoreEl.style.transform = "scale(1)"; }, 100);
+
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem("stack_best_v1", bestScore);
+        document.getElementById("bestDisplay").textContent = bestScore;
+      }
+
+      spawnNextBlock();
+    }
+
+    function triggerGameOver() {
+      isGameOver = true;
+      SoundFX.fall();
+
+      const isNewBest = score > 0 && score >= bestScore;
+      document.getElementById("newRecordBadge").style.display = isNewBest ? "block" : "none";
+      document.getElementById("finalScore").textContent = score;
+      document.getElementById("finalCombo").textContent = maxCombo;
+
+      setTimeout(() => {
+        document.getElementById("gameOverOverlay").classList.add("active");
+        sendScoreToBot(score);
+      }, 420);
+    }
+
+    // =========================================================================
+    // 4. ОТРИСОВКА И ПЛАВНАЯ АНИМАЦИЯ
+    // =========================================================================
+    function draw3DBlock(x, y, w, h, color) {
+      const topBev = 6;
+      // Основная передняя грань
+      ctx.fillStyle = color.main;
+      ctx.fillRect(x, y, w, h);
+
+      // Верхняя светлая грань (псевдо-3D объём)
+      ctx.fillStyle = color.top;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 8, y - topBev);
+      ctx.lineTo(x + w + 8, y - topBev);
+      ctx.lineTo(x + w, y);
+      ctx.closePath();
+      ctx.fill();
+
+      // Правая боковая теневая грань
+      ctx.fillStyle = color.side;
+      ctx.beginPath();
+      ctx.moveTo(x + w, y);
+      ctx.lineTo(x + w + 8, y - topBev);
+      ctx.lineTo(x + w + 8, y + h - topBev);
+      ctx.lineTo(x + w, y + h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function render(dt) {
+      const sec = dt / 1000;
+
+      // Динамический фон, меняющий оттенок по мере роста башни
+      const bgHue = (baseHue + score * 4 + 210) % 360;
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, `hsl(${bgHue}, 38%, 11%)`);
+      grad.addColorStop(1, `hsl(${(bgHue + 35) % 360}, 42%, 18%)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Плавное слежение камеры вверх
+      cameraY += (targetCameraY - cameraY) * Math.min(1, sec * 8);
+
+      // Движение активного блока влево-вправо
+      if (currentBlock && !isGameOver) {
+        currentBlock.x += currentBlock.dir * currentBlock.speed * sec;
+        const margin = 16;
+        if (currentBlock.dir === 1 && currentBlock.x + currentBlock.w > width - margin) {
+          currentBlock.x = width - margin - currentBlock.w;
+          currentBlock.dir = -1;
+        } else if (currentBlock.dir === -1 && currentBlock.x < margin) {
+          currentBlock.x = margin;
+          currentBlock.dir = 1;
+        }
+      }
+
+      ctx.save();
+      ctx.translate(0, cameraY);
+
+      // Отрисовка поставленных этажей башни (рисуем только видимые на экране)
+      for (let i = 0; i < stack.length; i++) {
+        const b = stack[i];
+        if (b.y + cameraY > height + 60) continue;
+        draw3DBlock(b.x, b.y, b.w, BLOCK_HEIGHT, b.color);
+      }
+
+      // Вспышки от идеальных попаданий
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const rp = ripples[i];
+        rp.expand += sec * 48;
+        rp.alpha -= sec * 1.8;
+        if (rp.alpha <= 0) {
+          ripples.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${rp.alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(rp.x - rp.expand / 2, rp.y - rp.expand / 4, rp.w + rp.expand, BLOCK_HEIGHT + rp.expand / 2);
+        ctx.restore();
+      }
+
+      // Активный движущийся блок
+      if (currentBlock && !isGameOver) {
+        draw3DBlock(currentBlock.x, currentBlock.y, currentBlock.w, BLOCK_HEIGHT, currentBlock.color);
+      }
+
+      // Падающие обрезанные куски
+      for (let i = debris.length - 1; i >= 0; i--) {
+        const d = debris[i];
+        d.x += d.vx * sec;
+        d.y += d.vy * sec;
+        d.vy += 980 * sec; // Гравитация
+        d.rot += d.vrot * sec;
+
+        if (d.y + cameraY > height + 120) {
+          debris.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.translate(d.x + d.w / 2, d.y + BLOCK_HEIGHT / 2);
+        ctx.rotate(d.rot);
+        draw3DBlock(-d.w / 2, -BLOCK_HEIGHT / 2, d.w, BLOCK_HEIGHT, d.color);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    // Управление тапом по экрану и Пробелом / Стрелкой вниз
+    canvas.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      dropBlock();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowDown" || e.code === "Enter") {
+        e.preventDefault();
+        if (isGameOver) {
+          startNewGame();
+        } else {
+          dropBlock();
+        }
+      }
+    });
+
+    document.getElementById("restartBtn").addEventListener("click", startNewGame);
+    document.getElementById("soundBtn").addEventListener("click", (e) => {
+      const on = SoundFX.toggle();
+      e.currentTarget.textContent = on ? "🔊" : "🔇";
+    });
+
+    function loop(now) {
+      const dt = Math.min(now - lastTime, 100);
+      lastTime = now;
+      render(dt);
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("resize", resize);
+    window.addEventListener("load", () => {
+      resize();
+      startNewGame();
+      requestAnimationFrame(loop);
+    });
+  </script>
+</body>
+</html>

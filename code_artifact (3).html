@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Тетрис — Рекорды</title>
+  <!-- Подключаем SDK Telegram Mini Apps (работает безопасно и в обычном браузере) -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #0d0f14;
+      color: #f1f5f9;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      touch-action: none; /* Отключаем системный скролл и зум при свайпах */
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px 14px;
+      background-image: radial-gradient(circle at 50% 0%, #1a2035 0%, #0d0f14 70%);
+    }
+
+    /* Верхняя панель HUD */
+    .hud {
+      width: 100%;
+      max-width: 380px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: stretch;
+      z-index: 2;
+    }
+
+    .card {
+      background: rgba(23, 27, 38, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+
+    .player-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 110px;
+    }
+
+    .level-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.14);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    .score-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fbbf24;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+    }
+
+    .best-val {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .best-val span {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+
+    /* Мини-окно следующей фигуры */
+    .next-card {
+      align-items: center;
+      padding: 6px 10px;
+      min-width: 76px;
+    }
+
+    .next-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    #nextCanvas {
+      display: block;
+      width: 56px;
+      height: 44px;
+    }
+
+    /* Кнопки звука и паузы */
+    .actions-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      justify-content: space-between;
+    }
+
+    .icon-btn {
+      flex: 1;
+      width: 38px;
+      background: rgba(23, 27, 38, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.15s;
+    }
+
+    .icon-btn:active {
+      transform: scale(0.92);
+      background: #283044;
+    }
+
+    /* Контейнер игрового поля */
+    .board-wrapper {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 8px 0;
+      min-height: 0;
+    }
+
+    #gameCanvas {
+      background: #12151e;
+      border: 2px solid rgba(99, 102, 241, 0.35);
+      border-radius: 14px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(99, 102, 241, 0.12);
+      transition: transform 0.08s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    /* Подсказка по управлению */
+    .hint-bar {
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    /* Нижние вспомогательные кнопки (для тех, кому удобнее нажимать) */
+    .controls {
+      width: 100%;
+      max-width: 380px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      z-index: 2;
+    }
+
+    .ctrl-btn {
+      background: rgba(30, 35, 48, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      border-radius: 12px;
+      padding: 12px 0;
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.1s, transform 0.08s;
+    }
+
+    .ctrl-btn:active {
+      background: #334155;
+      transform: scale(0.95);
+    }
+
+    .ctrl-btn.drop-btn {
+      background: linear-gradient(135deg, #4f46e5, #3b82f6);
+      border-color: rgba(129, 140, 248, 0.4);
+      font-size: 15px;
+    }
+
+    /* Модальные окна (Пауза / Конец игры) */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(9, 11, 16, 0.86);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      width: 100%;
+      max-width: 310px;
+      background: #171b26;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 22px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+      animation: popIn 0.2s ease-out;
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal h2 {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+
+    .modal-sub {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 18px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-box {
+      background: #0f121a;
+      border-radius: 12px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-box-label {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+
+    .stat-box-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fbbf24;
+    }
+
+    .tg-status {
+      font-size: 12px;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .primary-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.3);
+      transition: transform 0.1s;
+    }
+
+    .primary-btn:active {
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Верхняя панель HUD -->
+  <header class="hud">
+    <div class="card">
+      <div class="player-row">
+        <span class="player-name" id="playerName">Игрок</span>
+        <span class="level-badge" id="levelDisplay">Ур. 1</span>
+      </div>
+      <div class="score-val" id="scoreDisplay">0</div>
+      <div class="best-val">Рекорд: <span id="bestDisplay">0</span></div>
+    </div>
+
+    <!-- Окно следующей фигуры -->
+    <div class="card next-card">
+      <span class="next-label">След.</span>
+      <canvas id="nextCanvas"></canvas>
+    </div>
+
+    <!-- Звук и пауза -->
+    <div class="actions-col">
+      <button class="icon-btn" id="soundBtn" title="Звук">🔇</button>
+      <button class="icon-btn" id="pauseBtn" title="Пауза">⏸</button>
+    </div>
+  </header>
+
+  <!-- Игровое поле -->
+  <main class="board-wrapper" id="boardWrapper">
+    <canvas id="gameCanvas"></canvas>
+  </main>
+
+  <!-- Краткая подсказка -->
+  <div class="hint-bar" id="hintText">
+    Телефон: тап — поворот, свайп — движение / сброс • ПК: Пробел — поворот, Shift — сброс
+  </div>
+
+  <!-- Дополнительные кнопки управления снизу -->
+  <footer class="controls">
+    <button class="ctrl-btn" id="btnLeft" aria-label="Влево">⬅️</button>
+    <button class="ctrl-btn" id="btnRotate" aria-label="Поворот">🔄</button>
+    <button class="ctrl-btn" id="btnRight" aria-label="Вправо">➡️</button>
+    <button class="ctrl-btn drop-btn" id="btnHardDrop" aria-label="Сброс">⏬ Сброс</button>
+  </footer>
+
+  <!-- Окно паузы -->
+  <div class="overlay" id="pauseOverlay">
+    <div class="modal">
+      <h2>Пауза</h2>
+      <p class="modal-sub">Игра приостановлена</p>
+      <button class="primary-btn" id="resumeBtn">Продолжить</button>
+    </div>
+  </div>
+
+  <!-- Окно окончания игры -->
+  <div class="overlay" id="gameOverOverlay">
+    <div class="modal">
+      <h2>Игра окончена!</h2>
+      <p class="modal-sub" id="newRecordBadge" style="color: #22c55e; font-weight: 700; display: none;">
+        🎉 Новый личный рекорд!
+      </p>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-box-label">Ваш счёт</div>
+          <div class="stat-box-val" id="finalScore">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Линии</div>
+          <div class="stat-box-val" id="finalLines" style="color: #38bdf8;">0</div>
+        </div>
+      </div>
+      <div class="tg-status" id="tgStatusText">Рекорд сохранён локально</div>
+      <button class="primary-btn" id="restartBtn">Играть снова</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. НАСТРОЙКА ПОДКЛЮЧЕНИЯ К TELEGRAM БОТУ (заполним позже при деплое)
+    // =========================================================================
+    const SERVER_URL = ""; // Например: "https://твой-бот.ru/api/submit_score"
+
+    let tg = null;
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+          document.getElementById("playerName").textContent = tg.initDataUnsafe.user.first_name;
+        }
+      }
+    } catch (e) {
+      console.warn("Telegram SDK не активен:", e);
+    }
+
+    function sendScoreToBot(finalScore) {
+      const statusEl = document.getElementById("tgStatusText");
+      if (!tg || !tg.initData || !SERVER_URL) {
+        statusEl.textContent = "Локальный режим (готово к подключению бота)";
+        return;
+      }
+
+      statusEl.textContent = "Отправка рекорда в чат...";
+      fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData: tg.initData,
+          score: finalScore
+        })
+      })
+      .then(res => res.json())
+      .then(() => {
+        statusEl.textContent = "✅ Рекорд отправлен в группу!";
+      })
+      .catch(() => {
+        statusEl.textContent = "⚠️ Не удалось связаться с сервером бота";
+      });
+    }
+
+    // =========================================================================
+    // 2. ПРОЦЕДУРНЫЕ ЗВУКОВЫЕ ЭФФЕКТЫ (Web Audio API, без внешних файлов)
+    // =========================================================================
+    const SoundFX = (() => {
+      let ctx = null;
+      let enabled = false;
+
+      function init() {
+        if (!ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) ctx = new AudioCtx();
+        }
+        if (ctx && ctx.state === "suspended") ctx.resume();
+      }
+
+      function playTone(freq, type, duration, vol = 0.08, slideTo = null) {
+        if (!enabled) return;
+        init();
+        if (!ctx) return;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        if (slideTo) {
+          osc.frequency.exponentialRampToValueAtTime(slideTo, ctx.currentTime + duration);
+        }
+
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      }
+
+      return {
+        toggle() {
+          enabled = !enabled;
+          if (enabled) init();
+          return enabled;
+        },
+        move: () => playTone(220, "triangle", 0.04, 0.04),
+        rotate: () => playTone(380, "sine", 0.07, 0.07, 520),
+        drop: () => playTone(160, "sine", 0.11, 0.12, 55),
+        lock: () => playTone(120, "triangle", 0.06, 0.06),
+        clear: (lines) => {
+          const base = 440 + lines * 80;
+          playTone(base, "sine", 0.15, 0.1, base * 1.5);
+        },
+        gameOver: () => playTone(240, "sawtooth", 0.35, 0.08, 70)
+      };
+    })();
+
+    // =========================================================================
+    // 3. КОНСТАНТЫ И ФИГУРЫ ТЕТРИСА
+    // =========================================================================
+    const COLS = 10;
+    const ROWS = 20;
+
+    // Палитра с основным цветом и светлым бликом для объёмных блоков
+    const PIECE_DEFS = {
+      I: {
+        color: "#06b6d4",
+        light: "#67e8f9",
+        dark: "#0891b2",
+        matrix: [
+          [0, 0, 0, 0],
+          [1, 1, 1, 1],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ]
+      },
+      J: {
+        color: "#3b82f6",
+        light: "#93c5fd",
+        dark: "#1d4ed8",
+        matrix: [
+          [1, 0, 0],
+          [1, 1, 1],
+          [0, 0, 0]
+        ]
+      },
+      L: {
+        color: "#f97316",
+        light: "#fdba74",
+        dark: "#c2410c",
+        matrix: [
+          [0, 0, 1],
+          [1, 1, 1],
+          [0, 0, 0]
+        ]
+      },
+      O: {
+        color: "#eab308",
+        light: "#fde047",
+        dark: "#a16207",
+        matrix: [
+          [1, 1],
+          [1, 1]
+        ]
+      },
+      S: {
+        color: "#22c55e",
+        light: "#86efac",
+        dark: "#15803d",
+        matrix: [
+          [0, 1, 1],
+          [1, 1, 0],
+          [0, 0, 0]
+        ]
+      },
+      T: {
+        color: "#a855f7",
+        light: "#d8b4fe",
+        dark: "#7e22ce",
+        matrix: [
+          [0, 1, 0],
+          [1, 1, 1],
+          [0, 0, 0]
+        ]
+      },
+      Z: {
+        color: "#ef4444",
+        light: "#fca5a5",
+        dark: "#b91c1c",
+        matrix: [
+          [1, 1, 0],
+          [0, 1, 1],
+          [0, 0, 0]
+        ]
+      }
+    };
+
+    // =========================================================================
+    // 4. ИНИЦИАЛИЗАЦИЯ CANVAS (High-DPI для чёткой картинки на телефонах)
+    // =========================================================================
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const nextCanvas = document.getElementById("nextCanvas");
+    const nextCtx = nextCanvas.getContext("2d");
+    const boardWrapper = document.getElementById("boardWrapper");
+
+    let blockSize = 24;
+    let dpr = window.devicePixelRatio || 1;
+
+    function resizeCanvases() {
+      dpr = window.devicePixelRatio || 1;
+      const availH = boardWrapper.clientHeight - 6;
+      const availW = boardWrapper.clientWidth - 6;
+
+      blockSize = Math.floor(Math.min(availH / ROWS, availW / COLS));
+      blockSize = Math.max(16, blockSize);
+
+      const width = blockSize * COLS;
+      const height = blockSize * ROWS;
+
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Превью следующей фигуры
+      nextCanvas.width = 56 * dpr;
+      nextCanvas.height = 44 * dpr;
+      nextCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      drawNextPiece();
+    }
+
+    // =========================================================================
+    // 5. ИГРОВОЕ СОСТОЯНИЕ И 7-BAG РАНДОМАЙЗЕР
+    // =========================================================================
+    let board = [];
+    let bag = [];
+    let currentPiece = null;
+    let nextPieceType = null;
+
+    let score = 0;
+    let bestScore = parseInt(localStorage.getItem("tetris_best_v2") || "0", 10);
+    let lines = 0;
+    let level = 1;
+
+    let isPaused = false;
+    let isGameOver = false;
+
+    // Тайминги падения и фиксации (Lock Delay)
+    let lastTime = 0;
+    let dropAccumulator = 0;
+    let lockTimer = 0;
+    const LOCK_DELAY = 500; // 0.5 сек на корректировку позиции после касания дна
+
+    // Визуальные эффекты (вспышка линий и след от Hard Drop)
+    let flashRows = [];
+    let flashTimer = 0;
+    let dropTrail = null;
+
+    document.getElementById("bestDisplay").textContent = bestScore;
+
+    function refillBag() {
+      const types = Object.keys(PIECE_DEFS);
+      // Тасование Фишера — Йетса
+      for (let i = types.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [types[i], types[j]] = [types[j], types[i]];
+      }
+      bag.push(...types);
+    }
+
+    function takeFromBag() {
+      if (bag.length < 3) refillBag();
+      return bag.shift();
+    }
+
+    function createPieceObj(type) {
+      const def = PIECE_DEFS[type];
+      const matrix = def.matrix.map(row => [...row]);
+      return {
+        type,
+        matrix,
+        x: Math.floor((COLS - matrix[0].length) / 2),
+        y: type === "I" ? -1 : 0
+      };
+    }
+
+    // =========================================================================
+    // 6. ФИЗИКА СТОЛКНОВЕНИЙ И WALL KICKS (отскоки от стен при повороте)
+    // =========================================================================
+    function isValidPosition(matrix, offsetX, offsetY) {
+      for (let r = 0; r < matrix.length; r++) {
+        for (let c = 0; c < matrix[r].length; c++) {
+          if (!matrix[r][c]) continue;
+          const boardX = offsetX + c;
+          const boardY = offsetY + r;
+
+          if (boardX < 0 || boardX >= COLS || boardY >= ROWS) {
+            return false;
+          }
+          if (boardY >= 0 && board[boardY][boardX] !== null) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    function rotateMatrixCW(matrix) {
+      const N = matrix.length;
+      const result = Array.from({ length: N }, () => Array(N).fill(0));
+      for (let r = 0; r < N; r++) {
+        for (let c = 0; c < N; c++) {
+          result[c][N - 1 - r] = matrix[r][c];
+        }
+      }
+      return result;
+    }
+
+    function tryRotate() {
+      if (isPaused || isGameOver || !currentPiece) return;
+      const rotated = rotateMatrixCW(currentPiece.matrix);
+
+      // Набор сдвигов (Wall Kicks): центр, влево, вправо, вверх, двойной сдвиг для палки I
+      const kicks = [
+        [0, 0], [-1, 0], [1, 0], [0, -1], [-2, 0], [2, 0], [-1, -1], [1, -1]
+      ];
+
+      for (const [kx, ky] of kicks) {
+        if (isValidPosition(rotated, currentPiece.x + kx, currentPiece.y + ky)) {
+          currentPiece.matrix = rotated;
+          currentPiece.x += kx;
+          currentPiece.y += ky;
+          lockTimer = 0; // Сбрасываем таймер фиксации при успешном повороте
+          SoundFX.rotate();
+          return;
+        }
+      }
+    }
+
+    function moveHorizontal(dir) {
+      if (isPaused || isGameOver || !currentPiece) return false;
+      if (isValidPosition(currentPiece.matrix, currentPiece.x + dir, currentPiece.y)) {
+        currentPiece.x += dir;
+        lockTimer = 0;
+        SoundFX.move();
+        return true;
+      }
+      return false;
+    }
+
+    function getGhostY() {
+      let ghostY = currentPiece.y;
+      while (isValidPosition(currentPiece.matrix, currentPiece.x, ghostY + 1)) {
+        ghostY++;
+      }
+      return ghostY;
+    }
+
+    function hardDrop() {
+      if (isPaused || isGameOver || !currentPiece) return;
+      const startY = currentPiece.y;
+      const targetY = getGhostY();
+      const droppedCells = targetY - startY;
+
+      if (droppedCells > 0) {
+        score += droppedCells * 2;
+        updateHUD();
+
+        // Запоминаем след для красивой вспышки
+        dropTrail = {
+          x: currentPiece.x,
+          y1: Math.max(0, startY),
+          y2: targetY,
+          matrix: currentPiece.matrix,
+          color: PIECE_DEFS[currentPiece.type].color,
+          alpha: 0.35
+        };
+      }
+
+      currentPiece.y = targetY;
+      SoundFX.drop();
+
+      // Лёгкая микро-вибрация поля при падении
+      canvas.style.transform = "translateY(3px)";
+      setTimeout(() => { canvas.style.transform = "translateY(0)"; }, 75);
+
+      lockPiece();
+    }
+
+    function lockPiece() {
+      const { matrix, x, y, type } = currentPiece;
+      for (let r = 0; r < matrix.length; r++) {
+        for (let c = 0; c < matrix[r].length; c++) {
+          if (!matrix[r][c]) continue;
+          const by = y + r;
+          const bx = x + c;
+          if (by < 0) {
+            triggerGameOver();
+            return;
+          }
+          board[by][bx] = type;
+        }
+      }
+
+      SoundFX.lock();
+      clearCompletedLines();
+      spawnNextPiece();
+    }
+
+    function clearCompletedLines() {
+      const fullRows = [];
+      for (let r = 0; r < ROWS; r++) {
+        if (board[r].every(cell => cell !== null)) {
+          fullRows.push(r);
+        }
+      }
+
+      if (fullRows.length > 0) {
+        flashRows = [...fullRows];
+        flashTimer = 140;
+
+        // Удаляем заполненные строки сверху вниз
+        for (const r of fullRows) {
+          board.splice(r, 1);
+          board.unshift(Array(COLS).fill(null));
+        }
+
+        const linePoints = [0, 100, 300, 500, 800];
+        score += (linePoints[fullRows.length] || 800) * level;
+        lines += fullRows.length;
+        level = Math.floor(lines / 10) + 1;
+
+        SoundFX.clear(fullRows.length);
+        updateHUD();
+      }
+    }
+
+    function spawnNextPiece() {
+      currentPiece = createPieceObj(nextPieceType);
+      nextPieceType = takeFromBag();
+      lockTimer = 0;
+      dropAccumulator = 0;
+      drawNextPiece();
+
+      if (!isValidPosition(currentPiece.matrix, currentPiece.x, currentPiece.y)) {
+        triggerGameOver();
+      }
+    }
+
+    function updateHUD() {
+      document.getElementById("scoreDisplay").textContent = score;
+      document.getElementById("levelDisplay").textContent = "Ур. " + level;
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem("tetris_best_v2", bestScore);
+        document.getElementById("bestDisplay").textContent = bestScore;
+      }
+    }
+
+    function triggerGameOver() {
+      isGameOver = true;
+      SoundFX.gameOver();
+
+      const isNewBest = score > 0 && score >= bestScore;
+      document.getElementById("newRecordBadge").style.display = isNewBest ? "block" : "none";
+      document.getElementById("finalScore").textContent = score;
+      document.getElementById("finalLines").textContent = lines;
+      document.getElementById("gameOverOverlay").classList.add("active");
+
+      sendScoreToBot(score);
+    }
+
+    function startNewGame() {
+      board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      bag = [];
+      score = 0;
+      lines = 0;
+      level = 1;
+      isPaused = false;
+      isGameOver = false;
+      flashRows = [];
+      dropTrail = null;
+
+      document.getElementById("pauseOverlay").classList.remove("active");
+      document.getElementById("gameOverOverlay").classList.remove("active");
+
+      nextPieceType = takeFromBag();
+      spawnNextPiece();
+      updateHUD();
+      lastTime = performance.now();
+    }
+
+    // =========================================================================
+    // 7. ОТРИСОВКА ПОЛЯ, БЛОКОВ, ПРИЗРАКА И СЛЕДУЮЩЕЙ ФИГУРЫ
+    // =========================================================================
+    function drawBlock(context, px, py, size, type, isGhost = false) {
+      const def = PIECE_DEFS[type];
+      const pad = 1;
+      const x = px + pad;
+      const y = py + pad;
+      const s = size - pad * 2;
+      const radius = Math.max(3, size * 0.18);
+
+      if (isGhost) {
+        context.save();
+        context.strokeStyle = def.color;
+        context.globalAlpha = 0.35;
+        context.lineWidth = 1.5;
+        roundRect(context, x + 1, y + 1, s - 2, s - 2, radius);
+        context.stroke();
+        context.fillStyle = def.color;
+        context.globalAlpha = 0.08;
+        context.fill();
+        context.restore();
+        return;
+      }
+
+      // Основной цвет блока
+      context.fillStyle = def.color;
+      roundRect(context, x, y, s, s, radius);
+      context.fill();
+
+      // Верхний блик для объёма
+      context.fillStyle = def.light;
+      context.globalAlpha = 0.35;
+      roundRect(context, x + 2, y + 2, s - 4, s * 0.32, radius * 0.6);
+      context.fill();
+      context.globalAlpha = 1;
+    }
+
+    function roundRect(c, x, y, w, h, r) {
+      c.beginPath();
+      c.moveTo(x + r, y);
+      c.arcTo(x + w, y, x + w, y + h, r);
+      c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r);
+      c.arcTo(x, y, x + w, y, r);
+      c.closePath();
+    }
+
+    function drawNextPiece() {
+      nextCtx.clearRect(0, 0, 56, 44);
+      if (!nextPieceType) return;
+
+      const def = PIECE_DEFS[nextPieceType];
+      const m = def.matrix;
+      const miniSize = 12;
+
+      // Находим реальные границы фигуры, чтобы идеально отцентрировать
+      let minR = m.length, maxR = 0, minC = m[0].length, maxC = 0;
+      for (let r = 0; r < m.length; r++) {
+        for (let c = 0; c < m[r].length; c++) {
+          if (m[r][c]) {
+            minR = Math.min(minR, r);
+            maxR = Math.max(maxR, r);
+            minC = Math.min(minC, c);
+            maxC = Math.max(maxC, c);
+          }
+        }
+      }
+
+      const pieceW = (maxC - minC + 1) * miniSize;
+      const pieceH = (maxR - minR + 1) * miniSize;
+      const startX = (56 - pieceW) / 2;
+      const startY = (44 - pieceH) / 2;
+
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          if (m[r][c]) {
+            drawBlock(
+              nextCtx,
+              startX + (c - minC) * miniSize,
+              startY + (r - minR) * miniSize,
+              miniSize,
+              nextPieceType
+            );
+          }
+        }
+      }
+    }
+
+    function render(dt) {
+      const width = COLS * blockSize;
+      const height = ROWS * blockSize;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Тонкая сетка поля
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.035)";
+      ctx.lineWidth = 1;
+      for (let c = 1; c < COLS; c++) {
+        ctx.beginPath();
+        ctx.moveTo(c * blockSize, 0);
+        ctx.lineTo(c * blockSize, height);
+        ctx.stroke();
+      }
+      for (let r = 1; r < ROWS; r++) {
+        ctx.beginPath();
+        ctx.moveTo(0, r * blockSize);
+        ctx.lineTo(width, r * blockSize);
+        ctx.stroke();
+      }
+
+      // След от мгновенного сброса (Hard Drop)
+      if (dropTrail && dropTrail.alpha > 0) {
+        ctx.save();
+        const grad = ctx.createLinearGradient(0, dropTrail.y1 * blockSize, 0, (dropTrail.y2 + 2) * blockSize);
+        grad.addColorStop(0, "transparent");
+        grad.addColorStop(1, dropTrail.color);
+        ctx.fillStyle = grad;
+        ctx.globalAlpha = dropTrail.alpha;
+
+        for (let r = 0; r < dropTrail.matrix.length; r++) {
+          for (let c = 0; c < dropTrail.matrix[r].length; c++) {
+            if (dropTrail.matrix[r][c]) {
+              const bx = (dropTrail.x + c) * blockSize;
+              ctx.fillRect(bx + 2, dropTrail.y1 * blockSize, blockSize - 4, (dropTrail.y2 - dropTrail.y1 + r) * blockSize);
+            }
+          }
+        }
+        ctx.restore();
+        dropTrail.alpha -= dt * 0.0022;
+      }
+
+      // Уложенные блоки
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c]) {
+            drawBlock(ctx, c * blockSize, r * blockSize, blockSize, board[r][c]);
+          }
+        }
+      }
+
+      // Вспышка при сгорании линий
+      if (flashTimer > 0) {
+        ctx.save();
+        ctx.fillStyle = "#ffffff";
+        ctx.globalAlpha = (flashTimer / 140) * 0.55;
+        for (const r of flashRows) {
+          ctx.fillRect(0, r * blockSize, width, blockSize);
+        }
+        ctx.restore();
+        flashTimer -= dt;
+      }
+
+      // Текущая фигура и её призрак (Ghost Piece)
+      if (currentPiece && !isGameOver) {
+        const ghostY = getGhostY();
+        const { matrix, x, y, type } = currentPiece;
+
+        // Рисуем призрака
+        for (let r = 0; r < matrix.length; r++) {
+          for (let c = 0; c < matrix[r].length; c++) {
+            if (matrix[r][c] && ghostY + r >= 0) {
+              drawBlock(ctx, (x + c) * blockSize, (ghostY + r) * blockSize, blockSize, type, true);
+            }
+          }
+        }
+
+        // Рисуем активную фигуру
+        for (let r = 0; r < matrix.length; r++) {
+          for (let c = 0; c < matrix[r].length; c++) {
+            if (matrix[r][c] && y + r >= 0) {
+              drawBlock(ctx, (x + c) * blockSize, (y + r) * blockSize, blockSize, type, false);
+            }
+          }
+        }
+      }
+    }
+
+    // =========================================================================
+    // 8. ПЛАВНОЕ УПРАВЛЕНИЕ С КЛАВИАТУРЫ (DAS / ARR) И СЕНСОРА (СВАЙПЫ / ТАПЫ)
+    // =========================================================================
+    const keysHeld = {};
+    let dasTimer = 0;
+    let arrTimer = 0;
+    const DAS_DELAY = 135; // Задержка перед авто-повтором при удержании клавиши (мс)
+    const ARR_RATE = 32;   // Скорость скольжения при удержании (мс)
+
+    function handleKeyboardMovement(dt) {
+      const left = keysHeld["ArrowLeft"] || keysHeld["KeyA"];
+      const right = keysHeld["ArrowRight"] || keysHeld["KeyD"];
+
+      if (left !== right) {
+        const dir = left ? -1 : 1;
+        dasTimer += dt;
+        if (dasTimer >= DAS_DELAY) {
+          arrTimer += dt;
+          while (arrTimer >= ARR_RATE) {
+            moveHorizontal(dir);
+            arrTimer -= ARR_RATE;
+          }
+        }
+      } else {
+        dasTimer = 0;
+        arrTimer = 0;
+      }
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space", "ShiftLeft", "ShiftRight"].includes(e.code)) {
+        e.preventDefault();
+      }
+
+      if (e.code === "KeyP" || e.code === "Escape") {
+        togglePause();
+        return;
+      }
+
+      if (isPaused || isGameOver) return;
+
+      if (!keysHeld[e.code]) {
+        keysHeld[e.code] = true;
+        if (e.code === "ArrowLeft" || e.code === "KeyA") {
+          moveHorizontal(-1);
+          dasTimer = 0;
+          arrTimer = 0;
+        } else if (e.code === "ArrowRight" || e.code === "KeyD") {
+          moveHorizontal(1);
+          dasTimer = 0;
+          arrTimer = 0;
+        } else if (e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") {
+          tryRotate();
+        } else if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
+          hardDrop();
+        }
+      }
+    });
+
+    document.addEventListener("keyup", (e) => {
+      delete keysHeld[e.code];
+    });
+
+    // Сенсорное управление по всему игровому полю (свайпы и тап для поворота)
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchLastX = 0;
+    let touchLastY = 0;
+    let touchStartTime = 0;
+    let touchMoved = false;
+
+    boardWrapper.addEventListener("touchstart", (e) => {
+      if (isPaused || isGameOver) return;
+      const touch = e.touches[0];
+      touchStartX = touchLastX = touch.clientX;
+      touchStartY = touchLastY = touch.clientY;
+      touchStartTime = performance.now();
+      touchMoved = false;
+    }, { passive: true });
+
+    boardWrapper.addEventListener("touchmove", (e) => {
+      if (isPaused || isGameOver || !currentPiece) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchLastX;
+      const dy = touch.clientY - touchLastY;
+      const stepX = Math.max(18, blockSize * 0.9);
+      const stepY = Math.max(20, blockSize);
+
+      // Горизонтальное ведение пальцем по колонкам
+      if (Math.abs(dx) >= stepX) {
+        const steps = Math.trunc(dx / stepX);
+        const dir = steps > 0 ? 1 : -1;
+        for (let i = 0; i < Math.abs(steps); i++) {
+          moveHorizontal(dir);
+        }
+        touchLastX += steps * stepX;
+        touchMoved = true;
+      }
+
+      // Плавное ускорение вниз при ведении пальцем вниз
+      if (dy >= stepY && Math.abs(touch.clientY - touchStartY) > Math.abs(touch.clientX - touchStartX)) {
+        if (isValidPosition(currentPiece.matrix, currentPiece.x, currentPiece.y + 1)) {
+          currentPiece.y++;
+          score += 1;
+          updateHUD();
+        }
+        touchLastY = touch.clientY;
+        touchMoved = true;
+      }
+    }, { passive: true });
+
+    boardWrapper.addEventListener("touchend", (e) => {
+      if (isPaused || isGameOver) return;
+      const touch = e.changedTouches[0];
+      const totalDx = touch.clientX - touchStartX;
+      const totalDy = touch.clientY - touchStartY;
+      const elapsed = performance.now() - touchStartTime;
+
+      // Быстрый свайп вниз — мгновенный сброс (Hard Drop)
+      if (totalDy > 55 && Math.abs(totalDy) > Math.abs(totalDx) * 1.4 && elapsed < 320) {
+        hardDrop();
+        return;
+      }
+
+      // Короткий тап без сдвига — поворот фигуры
+      if (!touchMoved && Math.abs(totalDx) < 14 && Math.abs(totalDy) < 14 && elapsed < 260) {
+        tryRotate();
+      }
+    }, { passive: true });
+
+    // =========================================================================
+    // 9. КНОПКИ ИНТЕРФЕЙСА, ПАУЗА И ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ
+    // =========================================================================
+    function togglePause() {
+      if (isGameOver) return;
+      isPaused = !isPaused;
+      document.getElementById("pauseOverlay").classList.toggle("active", isPaused);
+      document.getElementById("pauseBtn").textContent = isPaused ? "▶️" : "⏸";
+      if (!isPaused) {
+        lastTime = performance.now();
+      }
+    }
+
+    document.getElementById("btnLeft").addEventListener("click", () => moveHorizontal(-1));
+    document.getElementById("btnRight").addEventListener("click", () => moveHorizontal(1));
+    document.getElementById("btnRotate").addEventListener("click", () => tryRotate());
+    document.getElementById("btnHardDrop").addEventListener("click", () => hardDrop());
+
+    document.getElementById("pauseBtn").addEventListener("click", togglePause);
+    document.getElementById("resumeBtn").addEventListener("click", togglePause);
+    document.getElementById("restartBtn").addEventListener("click", startNewGame);
+
+    document.getElementById("soundBtn").addEventListener("click", (e) => {
+      const on = SoundFX.toggle();
+      e.currentTarget.textContent = on ? "🔊" : "🔇";
+    });
+
+    function gameLoop(now) {
+      const dt = Math.min(now - lastTime, 100);
+      lastTime = now;
+
+      if (!isPaused && !isGameOver && currentPiece) {
+        handleKeyboardMovement(dt);
+
+        const softDrop = keysHeld["ArrowDown"] || keysHeld["KeyS"];
+        const baseInterval = Math.max(90, 800 - (level - 1) * 65);
+        const dropInterval = softDrop ? Math.min(45, baseInterval / 8) : baseInterval;
+
+        dropAccumulator += dt;
+        if (dropAccumulator >= dropInterval) {
+          dropAccumulator = 0;
+          if (isValidPosition(currentPiece.matrix, currentPiece.x, currentPiece.y + 1)) {
+            currentPiece.y++;
+            if (softDrop) {
+              score += 1;
+              updateHUD();
+            }
+          }
+        }
+
+        // Проверка касания пола и таймер задержки фиксации (Lock Delay)
+        if (!isValidPosition(currentPiece.matrix, currentPiece.x, currentPiece.y + 1)) {
+          lockTimer += dt;
+          if (lockTimer >= LOCK_DELAY) {
+            lockPiece();
+          }
+        } else {
+          lockTimer = 0;
+        }
+      }
+
+      render(dt);
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.addEventListener("resize", resizeCanvases);
+    window.addEventListener("load", () => {
+      resizeCanvases();
+      startNewGame();
+      requestAnimationFrame(gameLoop);
+    });
+  </script>
+</body>
+</html>

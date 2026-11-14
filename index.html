@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Игры в чате — Аркадный портал</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      min-height: 100dvh;
+      background-color: #0d0f14;
+      color: #f8fafc;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-image: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0d0f14 68%);
+      padding: 16px 14px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Шапка профиля */
+    .header-card {
+      background: rgba(23, 27, 38, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 20px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+
+    .user-info h1 {
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: -0.4px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .user-info p {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+
+    .chat-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #22c55e;
+      background: rgba(34, 197, 94, 0.14);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 6px 10px;
+      border-radius: 12px;
+      text-align: right;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      padding-left: 4px;
+    }
+
+    /* Сетка карточек игр */
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .game-card {
+      position: relative;
+      background: rgba(23, 27, 38, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 16px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.2s, box-shadow 0.2s;
+      overflow: hidden;
+    }
+
+    .game-card:active {
+      transform: scale(0.96);
+    }
+
+    .game-card:hover {
+      border-color: rgba(129, 140, 248, 0.45);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+    }
+
+    .game-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    .game-meta h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-bottom: 3px;
+    }
+
+    .game-meta p {
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.35;
+    }
+
+    .game-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .best-pill {
+      color: #fbbf24;
+    }
+
+    .play-arrow {
+      color: #38bdf8;
+    }
+
+    .footer-note {
+      text-align: center;
+      font-size: 11px;
+      color: #475569;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="header-card">
+      <div class="user-info">
+        <h1>ИГРЫ В ЧАТЕ</h1>
+        <p>Привет, <b id="playerName" style="color: #f8fafc;">Игрок</b>! Выбирай игру:</p>
+      </div>
+      <div class="chat-badge" id="modeBadge">🟢 Готов к игре</div>
+    </header>
+
+    <div class="section-title">Доступные аркады (6)</div>
+
+    <main class="games-grid" id="gamesGrid"></main>
+
+    <footer class="footer-note">
+      Все твои рекорды автоматически отправляются в таблицу лидеров группы
+    </footer>
+  </div>
+
+  <script>
+    const GAMES = [
+      {
+        id: "tetris",
+        file: "tetris.html",
+        title: "Тетрис",
+        desc: "Классика со свайпами, призраком и комбо",
+        icon: "🧱",
+        gradient: "linear-gradient(135deg, #06b6d4, #3b82f6)",
+        storageKey: "tetris_best_v2"
+      },
+      {
+        id: "2048",
+        file: "game2048.html",
+        title: "2048",
+        desc: "Соединяй числа и собери плитку 2048",
+        icon: "🔢",
+        gradient: "linear-gradient(135deg, #f59e0b, #ea580c)",
+        storageKey: "2048_best_v1"
+      },
+      {
+        id: "blockblast",
+        file: "blockblast.html",
+        title: "Block Blast",
+        desc: "Ставь фигуры на поле 8×8 и сбивай линии",
+        icon: "🟦",
+        gradient: "linear-gradient(135deg, #6366f1, #a855f7)",
+        storageKey: "blockblast_best_v1"
+      },
+      {
+        id: "wordle",
+        file: "wordle.html",
+        title: "5 Букв",
+        desc: "Угадай слово дня за 6 попыток",
+        icon: "🔤",
+        gradient: "linear-gradient(135deg, #10b981, #059669)",
+        storageKey: "wordle_score_v1"
+      },
+      {
+        id: "stack",
+        file: "stack.html",
+        title: "Башня",
+        desc: "Строй небоскрёб идеальными нажатиями",
+        icon: "🗼",
+        gradient: "linear-gradient(135deg, #ec4899, #f43f5e)",
+        storageKey: "stack_best_v1"
+      },
+      {
+        id: "snake",
+        file: "snake.html",
+        title: "Змейка",
+        desc: "Неоновая змейка с золотыми яблоками",
+        icon: "🐍",
+        gradient: "linear-gradient(135deg, #22c55e, #84cc16)",
+        storageKey: "snake_best_v1"
+      }
+    ];
+
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    let startParam = "";
+
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      if (tg.initDataUnsafe) {
+        if (tg.initDataUnsafe.user) {
+          document.getElementById("playerName").textContent = tg.initDataUnsafe.user.first_name;
+        }
+        if (tg.initDataUnsafe.start_param) {
+          startParam = tg.initDataUnsafe.start_param;
+          document.getElementById("modeBadge").textContent = "🏆 Рейтинг чата";
+        }
+      }
+    }
+
+    // Если бот передал конкретную игру в start_param (например "tetris_-10012345"),
+    // сразу перенаправляем игрока в неё!
+    if (startParam) {
+      const gamePrefix = startParam.split("_")[0];
+      const directGame = GAMES.find(g => g.id === gamePrefix);
+      if (directGame) {
+        window.location.replace(directGame.file + window.location.search);
+      }
+    }
+
+    // Отрисовка карточек всех 6 игр
+    const grid = document.getElementById("gamesGrid");
+    GAMES.forEach(game => {
+      const best = localStorage.getItem(game.storageKey) || "0";
+      const card = document.createElement("div");
+      card.className = "game-card";
+      card.innerHTML = `
+        <div class="game-icon" style="background: ${game.gradient};">${game.icon}</div>
+        <div class="game-meta">
+          <h2>${game.title}</h2>
+          <p>${game.desc}</p>
+        </div>
+        <div class="game-footer">
+          <span class="best-pill">🏆 ${best}</span>
+          <span class="play-arrow">Играть →</span>
+        </div>
+      `;
+      card.addEventListener("click", () => {
+        window.location.href = game.file + window.location.search;
+      });
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>
