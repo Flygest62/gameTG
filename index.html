@@ -249,6 +249,9 @@
     if (tg) {
       tg.ready();
       tg.expand();
+      if (tg.initData) {
+        sessionStorage.setItem("tg_init_data", tg.initData);
+      }
       if (tg.initDataUnsafe) {
         if (tg.initDataUnsafe.user) {
           document.getElementById("playerName").textContent = tg.initDataUnsafe.user.first_name;
@@ -260,13 +263,15 @@
       }
     }
 
+    const navSuffix = window.location.search + window.location.hash;
+
     // Если бот передал конкретную игру в start_param (например "tetris_-10012345"),
-    // сразу перенаправляем игрока в неё!
+    // сразу перенаправляем игрока в неё с сохранением хэша Telegram!
     if (startParam) {
       const gamePrefix = startParam.split("_")[0];
       const directGame = GAMES.find(g => g.id === gamePrefix);
       if (directGame) {
-        window.location.replace(directGame.file + window.location.search);
+        window.location.replace(directGame.file + navSuffix);
       }
     }
 
@@ -288,7 +293,7 @@
         </div>
       `;
       card.addEventListener("click", () => {
-        window.location.href = game.file + window.location.search;
+        window.location.href = game.file + navSuffix;
       });
       grid.appendChild(card);
     });
