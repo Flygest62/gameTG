@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Тетрис — Рекорды группы</title>
+  
+  <!-- 1. Подключаем скрипт Telegram Mini Apps -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      padding: 12px;
+      overflow: hidden;
+    }
+    .header {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e1e24;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+    .score-box { color: #ffd700; font-size: 18px; }
+    canvas {
+      background: #18181f;
+      border: 2px solid #2e2e3a;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .btn {
+      background: #2a2a35;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 0;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn:active { background: #3d3d4d; transform: scale(0.96); }
+    .btn-drop { grid-column: span 3; background: #2563eb; padding: 12px 0; font-size: 16px; }
+    
+    /* Окно конца игры */
+    #gameOverModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10;
+    }
+    #gameOverModal h2 { font-size: 28px; color: #ff4d4d; }
+    #statusText { font-size: 14px; color: #a0a0b0; text-align: center; max-width: 260px; }
+    .restart-btn {
+      background: #22c55e;
+      color: #000;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <span id="playerName">Игрок</span>
+    <span class="score-box">Очки: <span id="score">0</span></span>
+  </div>
+
+  <canvas id="tetris" width="240" height="400"></canvas>
+
+  <div class="controls">
+    <button class="btn" onclick="move(-1)">⬅️</button>
+    <button class="btn" onclick="rotatePiece()">🔄</button>
+    <button class="btn" onclick="move(1)">➡️</button>
+    <button class="btn btn-drop" onclick="drop()">⬇️ Вниз</button>
+  </div>
+
+  <div id="gameOverModal">
+    <h2>Игра окончена!</h2>
+    <p style="font-size: 20px;">Ваш счёт: <b id="finalScore">0</b></p>
+    <p id="statusText">Отправка рекорда...</p>
+    <button class="restart-btn" onclick="resetGame()">Играть снова</button>
+  </div>
+
+  <script>
+    // ================= НАСТРОЙКИ TELEGRAM И СЕРВЕРА =================
+    // Вставь сюда адрес твоего Python-сервера (когда запустишь его)
+    const SERVER_URL = "https://ТВОЙ-СЕРВЕР.ru/api/submit_score";
+
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        document.getElementById("playerName").innerText = tg.initDataUnsafe.user.first_name;
+      }
+    }
+
+    // Функция отправки очков на Python-сервер
+    function sendScoreToBot(finalScore) {
+      const statusEl = document.getElementById("statusText");
+
+      if (!tg || !tg.initData) {
+        statusEl.innerText = "Запущено вне Telegram (рекорд не отправлен)";
+        return;
+      }
+
+      fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData: tg.initData,
+          score: finalScore
+        })
+      })
+      .then(res => res.json())
+      .then(() => {
+        statusEl.innerText = "✅ Рекорд отправлен в группу!";
+      })
+      .catch(() => {
+        statusEl.innerText = "⚠️ Сервер пока недоступен";
+      });
+    }
+
+    // ================= ЛОГИКА ИГРЫ ТЕТРИС =================
+    const canvas = document.getElementById("tetris");
+    const ctx = canvas.getContext("2d");
+    ctx.scale(20, 20); // Поле 12x20 клеток
+
+    const colors = [null, "#ff0d72", "#0dc2ff", "#0dff72", "#f538ff", "#ff8e0d", "#ffe138", "#3877ff"];
+    const arena = Array.from({ length: 20 }, () => Array(12).fill(0));
+    const player = { pos: { x: 0, y: 0 }, matrix: null, score: 0 };
+
+    let dropCounter = 0;
+    let dropInterval = 700;
+    let lastTime = 0;
+    let isGameOver = false;
+
+    function createPiece(type) {
+      if (type === "T") return [[0, 1, 0], [1, 1, 1], [0, 0, 0]];
+      if (type === "O") return [[2, 2], [2, 2]];
+      if (type === "L") return [[0, 3, 0], [0, 3, 0], [0, 3, 3]];
+      if (type === "J") return [[0, 4, 0], [0, 4, 0], [4, 4, 0]];
+      if (type === "I") return [[0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0]];
+      if (type === "S") return [[0, 6, 6], [6, 6, 0], [0, 0, 0]];
+      if (type === "Z") return [[7, 7, 0], [0, 7, 7], [0, 0, 0]];
+    }
+
+    function drawMatrix(matrix, offset) {
+      matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+          if (value !== 0) {
+            ctx.fillStyle = colors[value];
+            ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
+            ctx.strokeStyle = "#18181f";
+            ctx.lineWidth = 0.08;
+            ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
+          }
+        });
+      });
+    }
+
+    function draw() {
+      ctx.fillStyle = "#18181f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawMatrix(arena, { x: 0, y: 0 });
+      drawMatrix(player.matrix, player.pos);
+    }
+
+    function collide(arena, player) {
+      const [m, o] = [player.matrix, player.pos];
+      for (let y = 0; y < m.length; ++y) {
+        for (let x = 0; x < m[y].length; ++x) {
+          if (m[y][x] !== 0 && (arena[y + o.y] && arena[y + o.y][x + o.x
