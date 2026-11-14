@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Башня (Stack) — Рекорды</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="config.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
@@ -243,7 +244,10 @@
 
   <header class="hud">
     <div class="top-row">
-      <span class="player-badge" id="playerName">Игрок</span>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="icon-btn" id="backMenuBtn" title="В меню игр">←</button>
+        <span class="player-badge" id="playerName">Игрок</span>
+      </div>
       <span class="best-badge">🏆 <span id="bestDisplay">0</span></span>
       <button class="icon-btn" id="soundBtn">🔇</button>
     </div>
@@ -270,7 +274,10 @@
         </div>
       </div>
       <div class="tg-status" id="tgStatusText">Рекорд сохранён локально</div>
-      <button class="primary-btn" id="restartBtn">Построить заново</button>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="primary-btn" id="restartBtn">Построить заново</button>
+        <button class="icon-btn" id="modalMenuBtn" style="width: 100%; height: 42px; border-radius: 14px; font-size: 14px; font-weight: 700;">← К выбору игр</button>
+      </div>
     </div>
   </div>
 
@@ -278,7 +285,7 @@
     // =========================================================================
     // 1. ПОДКЛЮЧЕНИЕ К TELEGRAM БОТУ
     // =========================================================================
-    const SERVER_URL = ""; // Например: "https://твой-бот.ru/api/submit_score"
+    const SERVER_URL = window.BOT_SERVER_URL || "https://need-november-blake-tall.trycloudflare.com/api/submit_score";
 
     let tg = null;
     try {
@@ -286,6 +293,9 @@
         tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
+        if (tg.initData) {
+          sessionStorage.setItem("tg_init_data", tg.initData);
+        }
         if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
           document.getElementById("playerName").textContent = tg.initDataUnsafe.user.first_name;
         }
@@ -294,7 +304,8 @@
 
     function sendScoreToBot(finalScore) {
       const statusEl = document.getElementById("tgStatusText");
-      if (!tg || !tg.initData || !SERVER_URL) {
+      const initData = (tg && tg.initData) || sessionStorage.getItem("tg_init_data") || "";
+      if (!initData || !SERVER_URL) {
         statusEl.textContent = "Локальный режим (готово к подключению бота)";
         return;
       }
@@ -304,7 +315,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          initData: tg.initData,
+          initData: initData,
           game: "stack",
           score: finalScore
         })
@@ -723,6 +734,12 @@
       const on = SoundFX.toggle();
       e.currentTarget.textContent = on ? "🔊" : "🔇";
     });
+
+    function goToMenu() {
+      window.location.href = "index.html" + window.location.search + window.location.hash;
+    }
+    document.getElementById("backMenuBtn").addEventListener("click", goToMenu);
+    document.getElementById("modalMenuBtn").addEventListener("click", goToMenu);
 
     function loop(now) {
       const dt = Math.min(now - lastTime, 100);
